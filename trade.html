@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Day Trader">
+<meta name="theme-color" content="#0d1117">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Day Trader — paper trading</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --border:#21262d; --text:#e6edf3;
+    --muted:#8b949e; --green:#3fb950; --red:#f85149; --accent:#58a6ff; --gold:#d29922;
+  }
+  * { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--bg); color:var(--text);
+         font:15px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;
+         padding:14px; padding-top:max(14px, env(safe-area-inset-top));
+         padding-bottom:max(24px, env(safe-area-inset-bottom)); max-width:760px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:650; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+  .link { color:var(--accent); text-decoration:none; font-size:13px; }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:14px; }
+  .cards { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .card .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .card .value { font-size:20px; font-weight:650; margin-top:2px; font-variant-numeric:tabular-nums;
+                 transition:color .3s; }
+  .pos { color:var(--green); } .neg { color:var(--red); }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px;
+           padding:14px; margin-bottom:14px; }
+  .panel h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;
+              margin-bottom:10px; }
+  .row { display:flex; gap:8px; }
+  input, select { background:var(--bg); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font:inherit; padding:10px 12px; width:100%; min-width:0; }
+  input:focus { outline:none; border-color:var(--accent); }
+  button { border:none; border-radius:8px; font:600 14px/1 inherit; padding:12px 16px;
+           cursor:pointer; color:#04130a; }
+  .b-buy { background:var(--green); } .b-sell { background:var(--red); color:#1a0505; }
+  .b-ghost { background:var(--panel); color:var(--muted); border:1px solid var(--border);
+             font-weight:500; padding:8px 12px; font-size:12px; }
+  button:disabled { opacity:.45; }
+  .quote { display:flex; justify-content:space-between; align-items:baseline; margin:12px 0 10px; }
+  .quote .px { font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .quote .chg { font-size:14px; font-weight:600; }
+  .quote .sym { font-size:15px; color:var(--accent); font-weight:700; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .chip { background:var(--bg); border:1px solid var(--border); border-radius:20px;
+          color:var(--muted); font-size:12px; padding:5px 11px; cursor:pointer; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th { text-align:left; color:var(--muted); font-size:10.5px; text-transform:uppercase;
+       padding:5px 4px; border-bottom:1px solid var(--border); }
+  td { padding:8px 4px; border-bottom:1px solid var(--border); font-size:13.5px; }
+  tr:last-child td { border-bottom:none; }
+  .tk { font-weight:650; color:var(--accent); cursor:pointer; }
+  .right { text-align:right; }
+  .small { font-size:11px; color:var(--muted); }
+  .flash-up { animation:fu .6s; } .flash-down { animation:fd .6s; }
+  @keyframes fu { 0% {background:rgba(63,185,80,.25)} 100% {background:transparent} }
+  @keyframes fd { 0% {background:rgba(248,81,73,.25)} 100% {background:transparent} }
+  .empty { color:var(--muted); font-size:13px; padding:8px 0; }
+  .msg { border-radius:8px; padding:10px 12px; font-size:13px; margin-top:10px; display:none; }
+  .msg.ok { display:block; background:rgba(63,185,80,.12); color:var(--green); }
+  .msg.err { display:block; background:rgba(248,81,73,.12); color:var(--red); }
+  details.settings { margin-top:4px; }
+  details.settings summary { color:var(--muted); font-size:12.5px; cursor:pointer; }
+  .live-dot { display:inline-block; width:7px; height:7px; border-radius:50%;
+              background:var(--green); margin-right:5px; animation:pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity:.35; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1><span class="live-dot"></span>Day Trader</h1>
+  <a class="link" href="index.html">Agent dashboard →</a>
+</div>
+<div class="sub">paper money · real prices · <span id="clock">—</span></div>
+
+<div class="cards">
+  <div class="card"><div class="label">Account Value</div><div class="value" id="cEquity">—</div></div>
+  <div class="card"><div class="label">Buying Power</div><div class="value" id="cCash">—</div></div>
+  <div class="card"><div class="label">Today's P&L</div><div class="value" id="cDay">—</div></div>
+  <div class="card"><div class="label">Total P&L</div><div class="value" id="cTotal">—</div></div>
+</div>
+
+<div class="panel">
+  <h2>Trade</h2>
+  <div class="row">
+    <input id="symInput" placeholder="Symbol — BTC, ETH, AAPL, TSLA…"
+           autocapitalize="characters" autocomplete="off">
+    <button class="b-ghost" style="flex-shrink:0" onclick="lookup()">Quote</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="quote" id="quoteRow" style="display:none">
+    <span class="sym" id="qSym"></span>
+    <span><span class="px" id="qPx"></span> <span class="chg" id="qChg"></span></span>
+  </div>
+  <div class="row" id="orderRow" style="display:none">
+    <input id="amtInput" type="number" inputmode="decimal" placeholder="Amount $">
+    <button class="b-buy" onclick="order('buy')">Buy</button>
+    <button class="b-sell" onclick="order('sell')">Sell</button>
+  </div>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="panel">
+  <h2>Positions <span class="small" id="posNote"></span></h2>
+  <table><thead><tr><th>Sym</th><th class="right">Qty @ Avg</th><th class="right">Price</th>
+    <th class="right">P&L</th></tr></thead><tbody id="posBody"></tbody></table>
+</div>
+
+<div class="panel">
+  <h2>Today's Trades</h2>
+  <table><thead><tr><th>Time</th><th>Sym</th><th>Side</th><th class="right">Qty</th>
+    <th class="right">Price</th><th class="right">Realized</th></tr></thead><tbody id="logBody"></tbody></table>
+</div>
+
+<div class="panel">
+  <details class="settings">
+    <summary>Settings — stock quotes, reset</summary>
+    <p class="small" style="margin:10px 0 6px">
+      Crypto (BTC, ETH, SOL, DOGE, XRP…) is live out of the box. For live <b>stock</b> quotes,
+      create a free API key at finnhub.io (2 min) and paste it here — it's stored only on this device.</p>
+    <div class="row" style="margin-bottom:10px">
+      <input id="keyInput" placeholder="Finnhub API key (optional)">
+      <button class="b-ghost" style="flex-shrink:0" onclick="saveKey()">Save</button>
+    </div>
+    <button class="b-ghost" onclick="resetAccount()">Reset account to $100,000</button>
+  </details>
+</div>
+
+<script>
+'use strict';
+const CRYPTO = ['BTC','ETH','SOL','DOGE','XRP','ADA','LTC','AVAX','LINK','BCH'];
+const DEFAULT_CHIPS = ['BTC','ETH','SOL','AAPL','TSLA','NVDA'];
+const LS = 'daytrader_v1';
+const $ = id => document.getElementById(id);
+const fmt$ = (v, d) => (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString(undefined,
+  {minimumFractionDigits: d ?? 2, maximumFractionDigits: d ?? 2});
+const sign$ = v => (v >= 0 ? '+' : '') + fmt$(v);
+const cls = v => v >= 0 ? 'pos' : 'neg';
+
+let S = load();
+let quotes = {};              // sym -> {px, prevClose, prevPx}
+let active = null;            // symbol in the trade box
+
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(LS)); if (s && s.cash != null) return s; }
+  catch (e) {}
+  return fresh();
+}
+function fresh() {
+  return { cash: 100000, startCash: 100000, positions: {}, trades: [],
+           day: today(), dayStartEquity: 100000, key: '' };
+}
+function save() { localStorage.setItem(LS, JSON.stringify(S)); }
+function today() { return new Date().toISOString().slice(0, 10); }
+function isCrypto(s) { return CRYPTO.includes(s); }
+
+// ------------------------------------------------------------- quotes ----
+async function fetchQuote(sym) {
+  if (isCrypto(sym)) {
+    const r = await fetch(`https://api.coinbase.com/v2/prices/${sym}-USD/spot`);
+    if (!r.ok) throw new Error('quote failed');
+    const px = parseFloat((await r.json()).data.amount);
+    const q = quotes[sym] || {};
+    quotes[sym] = { px, prevPx: q.px ?? px, prevClose: q.prevClose ?? px };
+    return quotes[sym];
+  }
+  if (!S.key) throw new Error('Stock quotes need a free Finnhub key — see Settings below.');
+  const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${S.key}`);
+  if (!r.ok) throw new Error(r.status === 401 ? 'API key rejected — check Settings.' : 'quote failed');
+  const j = await r.json();
+  if (!j.c) throw new Error(`No data for "${sym}" — check the symbol.`);
+  const q = quotes[sym] || {};
+  quotes[sym] = { px: j.c, prevPx: q.px ?? j.c, prevClose: j.pc || j.c };
+  return quotes[sym];
+}
+
+function watchlist() {
+  const w = new Set(Object.keys(S.positions));
+  if (active) w.add(active);
+  return [...w];
+}
+
+async function tick() {
+  await Promise.allSettled(watchlist().map(fetchQuote));
+  render();
+}
+
+// -------------------------------------------------------------- trade ----
+async function lookup() {
+  const sym = $('symInput').value.trim().toUpperCase();
+  if (!sym) return;
+  note('');
+  try {
+    await fetchQuote(sym);
+    active = sym;
+    render();
+  } catch (e) { note(e.message, true); }
+}
+
+function order(side) {
+  const sym = active, q = quotes[sym];
+  const dollars = parseFloat($('amtInput').value);
+  if (!q) return note('Get a quote first.', true);
+  if (!dollars || dollars <= 0) return note('Enter a dollar amount.', true);
+  const px = q.px;
+  let qty = dollars / px;
+  const pos = S.positions[sym];
+  if (side === 'buy') {
+    if (dollars > S.cash) return note('Not enough buying power.', true);
+    const cur = pos || { qty: 0, avg: 0 };
+    cur.avg = (cur.qty * cur.avg + qty * px) / (cur.qty + qty);
+    cur.qty += qty;
+    S.positions[sym] = cur;
+    S.cash -= dollars;
+    logTrade(sym, 'buy', qty, px, null);
+    note(`Bought ${qtyFmt(qty)} ${sym} @ ${fmt$(px)}`);
+  } else {
+    if (!pos || pos.qty <= 0) return note(`You don't own ${sym}.`, true);
+    qty = Math.min(qty, pos.qty);
+    const realized = qty * (px - pos.avg);
+    pos.qty -= qty;
+    S.cash += qty * px;
+    if (pos.qty * px < 0.01) delete S.positions[sym];
+    logTrade(sym, 'sell', qty, px, realized);
+    note(`Sold ${qtyFmt(qty)} ${sym} @ ${fmt$(px)} (${sign$(realized)})`);
+  }
+  $('amtInput').value = '';
+  save(); render();
+}
+
+function logTrade(sym, side, qty, px, realized) {
+  S.trades.unshift({ ts: Date.now(), sym, side, qty, px, realized });
+  S.trades = S.trades.slice(0, 200);
+}
+function qtyFmt(q) { return q >= 100 ? q.toFixed(1) : q.toFixed(4).replace(/\.?0+$/, ''); }
+function note(t, err) {
+  const m = $('msg'); m.textContent = t; m.className = 'msg' + (t ? (err ? ' err' : ' ok') : '');
+}
+
+// ------------------------------------------------------------- render ----
+function equity() {
+  let eq = S.cash;
+  for (const [s, p] of Object.entries(S.positions)) eq += p.qty * (quotes[s]?.px ?? p.avg);
+  return eq;
+}
+
+function rollDay(eq) {
+  if (S.day !== today()) { S.day = today(); S.dayStartEquity = eq; save(); }
+}
+
+function setVal(id, text, c) {
+  const el = $(id);
+  if (el.textContent !== text) { el.textContent = text; }
+  el.className = 'value ' + (c || '');
+}
+
+function render() {
+  const eq = equity();
+  rollDay(eq);
+  setVal('cEquity', fmt$(eq));
+  setVal('cCash', fmt$(S.cash));
+  const day = eq - S.dayStartEquity, tot = eq - S.startCash;
+  setVal('cDay', sign$(day), cls(day));
+  setVal('cTotal', sign$(tot), cls(tot));
+
+  // quote box
+  if (active && quotes[active]) {
+    const q = quotes[active];
+    $('quoteRow').style.display = 'flex';
+    $('orderRow').style.display = 'flex';
+    $('qSym').textContent = active + (isCrypto(active) ? ' · crypto' : '');
+    const el = $('qPx');
+    el.textContent = fmt$(q.px, q.px < 2 ? 4 : 2);
+    if (q.px > q.prevPx) { el.classList.remove('flash-down'); void el.offsetWidth; el.classList.add('flash-up'); }
+    if (q.px < q.prevPx) { el.classList.remove('flash-up'); void el.offsetWidth; el.classList.add('flash-down'); }
+    const chg = q.px - q.prevClose, pct = q.prevClose ? 100 * chg / q.prevClose : 0;
+    $('qChg').textContent = `${chg >= 0 ? '▲' : '▼'} ${pct.toFixed(2)}%`;
+    $('qChg').className = 'chg ' + cls(chg);
+  }
+
+  // positions
+  const rows = Object.entries(S.positions).map(([s, p]) => {
+    const px = quotes[s]?.px ?? p.avg, val = p.qty * px, pnl = val - p.qty * p.avg;
+    const pct = p.avg ? 100 * (px / p.avg - 1) : 0;
+    return `<tr><td><span class="tk" onclick="pick('${s}')">${s}</span></td>
+      <td class="right">${qtyFmt(p.qty)}<br><span class="small">@ ${fmt$(p.avg, p.avg < 2 ? 4 : 2)}</span></td>
+      <td class="right">${fmt$(px, px < 2 ? 4 : 2)}</td>
+      <td class="right ${cls(pnl)}">${sign$(pnl)}<br><span class="small">${(pct >= 0 ? '+' : '') + pct.toFixed(2)}%</span></td></tr>`;
+  });
+  $('posBody').innerHTML = rows.join('') || '<tr><td colspan="4" class="empty">Nothing yet — buy something!</td></tr>';
+  $('posNote').textContent = rows.length ? '· live' : '';
+
+  // today's log
+  const dayTrades = S.trades.filter(t => new Date(t.ts).toISOString().slice(0, 10) === today());
+  $('logBody').innerHTML = dayTrades.map(t => `<tr>
+    <td>${new Date(t.ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
+    <td><span class="tk" onclick="pick('${t.sym}')">${t.sym}</span></td>
+    <td class="${t.side === 'buy' ? 'pos' : 'neg'}">${t.side.toUpperCase()}</td>
+    <td class="right">${qtyFmt(t.qty)}</td><td class="right">${fmt$(t.px, t.px < 2 ? 4 : 2)}</td>
+    <td class="right ${t.realized == null ? '' : cls(t.realized)}">${t.realized == null ? '—' : sign$(t.realized)}</td></tr>`
+  ).join('') || '<tr><td colspan="6" class="empty">No trades today</td></tr>';
+}
+
+function pick(s) { $('symInput').value = s; lookup(); }
+
+// ----------------------------------------------------------- settings ----
+function saveKey() {
+  S.key = $('keyInput').value.trim(); save();
+  note(S.key ? 'Key saved — stock quotes enabled.' : 'Key cleared.');
+}
+function resetAccount() {
+  if (!confirm('Reset your paper account to $100,000? This clears positions and history.')) return;
+  const key = S.key; S = fresh(); S.key = key; quotes = {}; active = null;
+  save(); render(); note('Account reset. Fresh $100,000.');
+}
+
+// -------------------------------------------------------------- start ----
+$('chips').innerHTML = DEFAULT_CHIPS.map(s => `<span class="chip" onclick="pick('${s}')">${s}</span>`).join('');
+$('keyInput').value = S.key || '';
+$('symInput').addEventListener('keydown', e => { if (e.key === 'Enter') lookup(); });
+setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+render();
+tick();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>
