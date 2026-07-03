@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Agent Desk">
+<meta name="theme-color" content="#0d1117">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Agent Investing Team</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="data/dashboard_data.js"></script>
+<script>document.write(window.DASHBOARD_DATA ? '' : '<script src="dashboard_data.js"><\/script>')</script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #21262d;
+    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
+    --accent: #58a6ff; --gold: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; }
+  h1 { font-size: 20px; font-weight: 600; }
+  h1 .dot { color: var(--green); }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .grid { display: grid; gap: 16px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }
+  .card, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .card .value { font-size: 22px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .cols { grid-template-columns: 2fr 1fr; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .panel h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  .tk { font-weight: 650; color: var(--accent); }
+  .side { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+  .buy  { background: rgba(63,185,80,.15);  color: var(--green); }
+  .sell { background: rgba(248,81,73,.15); color: var(--red); }
+  details { margin-top: 4px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
+  summary:hover { color: var(--accent); }
+  .reason { font-size: 12px; color: var(--muted); padding: 8px 0 2px; }
+  .reason b { color: var(--text); font-weight: 600; }
+  .feed-item { border-bottom: 1px solid var(--border); padding: 10px 0; font-size: 12.5px; }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-ts { color: var(--muted); font-size: 11px; }
+  .role { font-weight: 700; }
+  .role.a { color: var(--accent); } .role.r { color: var(--gold); } .role.t { color: var(--green); }
+  .rail { color: var(--red); font-size: 11.5px; }
+  .empty { color: var(--muted); padding: 12px 0; }
+  #chartWrap { height: 320px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #runBtn { display: none; background: var(--green); color: #04130a; border: none; border-radius: 8px;
+            padding: 8px 16px; font: 600 13px/1 inherit; cursor: pointer; }
+  #runBtn:disabled { opacity: .5; }
+  @media (max-width: 600px) {
+    body { padding: 12px; padding-top: max(12px, env(safe-area-inset-top)); }
+    .card, .panel { padding: 12px; }
+    .card .value { font-size: 17px; }
+    .cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    #chartWrap { height: 230px; }
+    .panel { overflow-x: auto; }
+    td, th { padding: 6px 5px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1><span class="dot">●</span> Agent Investing Team</h1>
+  <button id="runBtn" onclick="runCycle()">Run cycle ▸</button>
+</div>
+<div class="sub" id="sub">paper portfolio · loading…</div>
+<script>
+  // Show the Run button only when the local team.py server is behind this page
+  // (hidden on GitHub Pages or when opened as a plain file).
+  if (location.protocol.startsWith('http')) {
+    fetch('/ping').then(r => r.json()).then(r => {
+      if (r.ok) document.getElementById('runBtn').style.display = 'block';
+    }).catch(() => {});
+  }
+  async function runCycle() {
+    const b = document.getElementById('runBtn');
+    b.disabled = true; b.textContent = 'Agents working…';
+    try {
+      const r = await (await fetch('/run')).json();
+      if (!r.ok) throw new Error(r.msg);
+      location.reload();
+    } catch (e) {
+      b.textContent = 'Failed — retry?'; b.disabled = false;
+      console.error(e);
+    }
+  }
+</script>
+
+<div class="grid cards" id="cards"></div>
+
+<div class="grid cols">
+  <div>
+    <div class="panel" style="margin-bottom:16px">
+      <h2>Performance — Agent vs S&amp;P 500 (%)</h2>
+      <div id="chartWrap"><canvas id="chart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Trade Log <span style="text-transform:none;font-weight:400">(expand rows for the team's reasoning)</span></h2>
+      <table id="trades"><thead><tr>
+        <th>Date</th><th>Ticker</th><th>Side</th><th style="text-align:right">Shares</th>
+        <th style="text-align:right">Price</th><th style="text-align:right">Amount</th><th style="text-align:right">Realized P&amp;L</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <div>
+    <div class="panel" style="margin-bottom:16px">
+      <h2>Open Positions</h2>
+      <table id="positions"><thead><tr>
+        <th>Ticker</th><th style="text-align:right">Value</th><th style="text-align:right">P&amp;L</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="panel">
+      <h2>Agent Activity</h2>
+      <div id="feed"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const D = window.DASHBOARD_DATA;
+if (!D) {
+  document.getElementById('sub').textContent =
+    'No data yet — run  python team.py seed-demo  (or  python team.py run )  first.';
+} else {
+  const $ = id => document.getElementById(id);
+  const fmt$ = v => (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString(undefined, {maximumFractionDigits: 2});
+  const pct = v => (v > 0 ? '+' : '') + v + '%';
+  const cls = v => v >= 0 ? 'pos' : 'neg';
+  const day = ts => ts.slice(0, 10);
+
+  $('sub').textContent = 'paper portfolio · updated ' + D.generated.replace('T', ' ').slice(0, 16) + ' UTC';
+
+  const s = D.stats;
+  const cards = [
+    ['Portfolio Value', fmt$(s.equity), ''],
+    ['Total Return', pct(s.total_return_pct), cls(s.total_return_pct)],
+    ['S&P 500', pct(s.spy_return_pct), cls(s.spy_return_pct)],
+    ['Alpha vs Market', pct(s.alpha_pct), cls(s.alpha_pct)],
+    ['Cash', fmt$(s.cash), ''],
+    ['Trades', s.trades, ''],
+    ['Win Rate', s.win_rate == null ? '—' : s.win_rate + '%', ''],
+    ['Realized P&L', fmt$(s.realized_pnl), cls(s.realized_pnl)],
+  ];
+  $('cards').innerHTML = cards.map(([l, v, c]) =>
+    `<div class="card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`).join('');
+
+  new Chart($('chart'), {
+    type: 'line',
+    data: {
+      labels: D.curve.map(p => day(p.ts)),
+      datasets: [
+        {label: 'Agent Team', data: D.curve.map(p => p.agent), borderColor: '#3fb950',
+         backgroundColor: 'rgba(63,185,80,.08)', fill: true, tension: .3, pointRadius: 0, borderWidth: 2},
+        {label: 'S&P 500', data: D.curve.map(p => p.spy), borderColor: '#8b949e',
+         borderDash: [5, 4], tension: .3, pointRadius: 0, borderWidth: 1.5},
+      ]
+    },
+    options: {
+      maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+      plugins: {legend: {labels: {color: '#e6edf3', boxWidth: 14}}},
+      scales: {
+        x: {ticks: {color: '#8b949e', maxTicksLimit: 10}, grid: {color: '#21262d'}},
+        y: {ticks: {color: '#8b949e', callback: v => v + '%'}, grid: {color: '#21262d'}}
+      }
+    }
+  });
+
+  const posBody = $('positions').tBodies[0];
+  posBody.innerHTML = D.positions.length ? D.positions.map(p => `
+    <tr><td><span class="tk">${p.ticker}</span><br>
+        <span style="color:var(--muted);font-size:11px">${p.shares} sh @ ${fmt$(p.avg_cost)}</span></td>
+    <td style="text-align:right">${fmt$(p.value)}</td>
+    <td style="text-align:right" class="${cls(p.pnl)}">${fmt$(p.pnl)}<br>
+        <span style="font-size:11px">${pct(p.pnl_pct)}</span></td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">No open positions</td></tr>';
+
+  const trBody = $('trades').tBodies[0];
+  trBody.innerHTML = D.trades.length ? D.trades.map(t => {
+    const reason = (t.analyst || t.risk || t.trader) ? `
+      <details><summary>team reasoning</summary><div class="reason">
+        ${t.analyst ? `<b>Analyst:</b> ${t.analyst}<br>` : ''}
+        ${t.risk ? `<b>Risk:</b> ${t.risk}<br>` : ''}
+        ${t.trader ? `<b>Trader:</b> ${t.trader}` : ''}
+      </div></details>` : '';
+    return `<tr><td>${day(t.ts)}</td>
+      <td><span class="tk">${t.ticker}</span>${reason}</td>
+      <td><span class="side ${t.side}">${t.side.toUpperCase()}</span></td>
+      <td style="text-align:right">${t.shares}</td>
+      <td style="text-align:right">${fmt$(t.price)}</td>
+      <td style="text-align:right">${fmt$(t.dollars)}</td>
+      <td style="text-align:right" class="${t.realized_pnl == null ? '' : cls(t.realized_pnl)}">
+        ${t.realized_pnl == null ? '—' : fmt$(t.realized_pnl)}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">No trades yet</td></tr>';
+
+  $('feed').innerHTML = D.activity.length ? D.activity.map(a => `
+    <div class="feed-item">
+      <div class="feed-ts">${a.ts.replace('T', ' ').slice(0, 16)}</div>
+      ${a.analyst ? `<div><span class="role a">Analyst</span> — ${a.analyst}</div>` : ''}
+      ${a.risk ? `<div><span class="role r">Risk</span> — ${a.risk}</div>` : ''}
+      ${a.trader ? `<div><span class="role t">Trader</span> — ${a.trader}</div>` : ''}
+      ${(a.rails || []).map(r => `<div class="rail">⛔ rail blocked ${r}</div>`).join('')}
+    </div>`).join('') : '<div class="empty">No activity yet</div>';
+}
+</script>
+</body>
+</html>
